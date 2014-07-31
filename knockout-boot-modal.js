@@ -13,23 +13,48 @@
 define(["knockout", "jquery"],
     function (ko, $) {
 
-        ko.utils.openModal = function (options) {
+        ko.utils.showModal = function (options) {
             if (typeof options === "undefined") throw new Error("An options argument is required.");
             if (typeof options.viewModel !== "object") throw new Error("options.viewModel is required.");
 
             var viewModel = options.viewModel;
-            var template = options.template || viewModel.template;
-            var context = options.context;
+            var deferredModalResult = $.Deferred();
+            var template;
+            if (options.overrideBase) {
+                template = options.template || viewModel.template;
+            } else {
+                template = "base-modal";
+                viewModel.contentTemplate = function () {
+                    return options.template;
+                };
+            }
+
+            var modal_title = options.title || "Modal popup";
+
+            var buttonsViewModel = options.buttons && options.buttons.length > 0 ? options.buttons : [];
+            viewModel.modalOptions =
+            {
+                title: modal_title,
+                buttons: buttonsViewModel,
+                clickHandler: function (vm, event) {
+                    if (event.target && event.target.tagName === "BUTTON") {
+                        var targetViewModel = ko.dataFor(event.target);
+                        deferredModalResult.resolve(targetViewModel, event.currentTarget);
+                    }
+                }
+            };
 
             if (!template) throw new Error("options.template or options.viewModel.template is required.");
 
             return createModalElement(template, viewModel)
                 .pipe($) // jQueryify the DOM element
                 .pipe(function ($ui) {
-                    var deferredModalResult = $.Deferred();
                     showTwitterBootstrapModal($ui);
                     return deferredModalResult;
                 });
+
+
+
 
 
             // Helper functions
@@ -78,8 +103,10 @@ define(["knockout", "jquery"],
                 });
 
                 $ui.on("hidden.bs.modal", function (e) {
+
                     ko.cleanNode($ui[0]);
                     $ui.remove();
+                    viewModel.modalOptions = null;
                 });
 
             };
